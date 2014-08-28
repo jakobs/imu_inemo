@@ -223,26 +223,34 @@ public:
 
     void connect()
     {
-	Message msg( Message::CONTROL, true, 0, Message::VERSION1, Message::QOS_NORMAL, 1, iNEMO_Connect );
+	Message msg( Message::CONTROL, true, 0, 
+		Message::VERSION1, Message::QOS_NORMAL, 1, 
+		iNEMO_Connect );
 	sendMessage( msg );
     };
 
     void disconnect()
     {
-	Message msg( Message::CONTROL, true, 0, Message::VERSION1, Message::QOS_NORMAL, 1, iNEMO_Disconnect );
+	Message msg( Message::CONTROL, true, 0, 
+		Message::VERSION1, Message::QOS_NORMAL, 1, 
+		iNEMO_Disconnect );
 	sendMessage( msg );
     };
 
     available_libraries getAvailableLibraries()
     {
-	Message msg( Message::CONTROL, true, 0, Message::VERSION1, Message::QOS_NORMAL, 1, iNEMO_Get_Libraries );
+	Message msg( Message::CONTROL, true, 0, 
+		Message::VERSION1, Message::QOS_NORMAL, 1, 
+		iNEMO_Get_Libraries );
 	sendMessage( msg );
 	return available_libraries(response[0]);
     };
 
     available_sensors getAvailableSensors()
     {
-	Message msg( Message::CONTROL, true, 0, Message::VERSION1, Message::QOS_NORMAL, 1, iNEMO_Get_Available_Sensors );
+	Message msg( Message::CONTROL, true, 0, 
+		Message::VERSION1, Message::QOS_NORMAL, 1, 
+		iNEMO_Get_Available_Sensors );
 	sendMessage( msg );
 	return available_sensors(response[0]);
     };
@@ -297,7 +305,6 @@ public:
 	    }
 	    return length;
 	}
-	
 
 	// there is no particular way of identifying a packet start
 	return 0;
