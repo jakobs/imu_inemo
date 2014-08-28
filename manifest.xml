@@ -1,0 +1,18 @@
+<package>
+  <description brief="Driver library for ST devices from the INEMO line">
+  This is a partial implementation of the UM1744 protocol description, which supports connecting to inemo devices and retrieving sensor data.
+  </description>
+  <author>Jakob Schwendner/jakob.schwendner@dfki.de</author>
+  <license></license>
+  <url>http://</url>
+  <logo>http://</logo>
+  <depend package="base/cmake" />
+  <!--
+   To add any dependencies use the depend tag
+  <depend package="dummy-dependency-0" />
+	...
+  <depend package="dummy-dependency-n-1" />
+  <depend package="dummy-dependency-n" />
+  -->
+  <depend package="iodrivers_base" />
+</package>
