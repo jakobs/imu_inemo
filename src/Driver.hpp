@@ -5,6 +5,8 @@
 #include <boost/cstdint.hpp>
 #include <base/Logging.hpp>
 
+#include <iostream>
+
 namespace imu_inemo
 {
 
@@ -94,7 +96,9 @@ struct Message
 
     boost::uint8_t& operator[]( size_t index )
     {
-	if( index-1 >= length ) 
+	// a message length of 1 means no payload
+	// this is probably because the message_id is counted as payload
+	if( index+1 >= length ) 
 	    throw std::runtime_error("Message access out of bounds");
 
 	return payload[index];
@@ -144,10 +148,72 @@ enum error_code
     iNEMO_Not_connected	      = 0x05, 
 };
 
+struct available_libraries
+{
+    boost::uint8_t value;
+
+    explicit available_libraries( boost::uint8_t value )
+	: value( value ) {}
+
+    bool hasFAT() const { return value & 1 << 4; }
+    bool hasTrace() const { return value & 1 << 3; }
+    bool hasAltimeter() const { return value & 1 << 2; }
+    bool hasCompass() const { return value & 1 << 1; }
+    bool hasAHRS() const { return value & 1 << 0; }
+
+    friend std::ostream& operator<< (std::ostream& os, const available_libraries& lib)
+    {
+	os << "Available libraries: ";
+	if( lib.hasFAT() )
+	    os << "FAT ";
+	if( lib.hasTrace() )
+	    os << "Trace ";
+	if( lib.hasAltimeter() )
+	    os << "Altimeter ";
+	if( lib.hasCompass() )
+	    os << "Compass ";
+	if( lib.hasAHRS() )
+	    os << "AHRS ";
+	return os;
+    };
+};
+
+struct available_sensors
+{
+    boost::uint8_t value;
+
+    explicit available_sensors( boost::uint8_t value )
+	: value( value ) {}
+
+    bool hasACC() const { return value & 1 << 4; }
+    bool hasGYRO() const { return value & 1 << 3; }
+    bool hasMAG() const { return value & 1 << 2; }
+    bool hasPRESS() const { return value & 1 << 1; }
+    bool hasTEMP() const { return value & 1 << 0; }
+
+    friend std::ostream& operator<< (std::ostream& os, const available_sensors& lib)
+    {
+	os << "Available sensors: ";
+	if( lib.hasACC() )
+	    os << "ACC ";
+	if( lib.hasGYRO() )
+	    os << "Gyro ";
+	if( lib.hasMAG() )
+	    os << "MAG ";
+	if( lib.hasPRESS() )
+	    os << "PRESS ";
+	if( lib.hasTEMP() )
+	    os << "TEMP ";
+	return os;
+    };
+};
+
+
 class Driver : public iodrivers_base::Driver
 {
 public:
     static const int MAX_PACKAGE_SIZE = 64;
+    Message response;
 
     Driver() :
 	iodrivers_base::Driver( MAX_PACKAGE_SIZE )
@@ -167,13 +233,21 @@ public:
 	sendMessage( msg );
     };
 
-    void sendMessage( const Message& msg )
+    available_libraries getAvailableLibraries()
     {
-	Message response;
-	sendMessage( msg, response );
-    }
+	Message msg( Message::CONTROL, true, 0, Message::VERSION1, Message::QOS_NORMAL, 1, iNEMO_Get_Libraries );
+	sendMessage( msg );
+	return available_libraries(response[0]);
+    };
 
-    void sendMessage( const Message& msg, Message& response )
+    available_sensors getAvailableSensors()
+    {
+	Message msg( Message::CONTROL, true, 0, Message::VERSION1, Message::QOS_NORMAL, 1, iNEMO_Get_Available_Sensors );
+	sendMessage( msg );
+	return available_sensors(response[0]);
+    };
+
+    void sendMessage( const Message& msg )
     {
 	// send out the packet
 	writePacket( reinterpret_cast<const boost::uint8_t*>(&msg), msg.getPacketLength() );

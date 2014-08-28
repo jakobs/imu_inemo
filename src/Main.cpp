@@ -16,6 +16,9 @@ int main(int argc, char** argv)
     driver.openSerial( device_name, 115200 ); 
     driver.connect();
 
+    std::cout << driver.getAvailableLibraries() << std::endl;;
+    std::cout << driver.getAvailableSensors() << std::endl;;
+
     sleep( 2 );
 
     driver.disconnect();
