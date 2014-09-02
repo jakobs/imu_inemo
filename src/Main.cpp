@@ -19,7 +19,27 @@ int main(int argc, char** argv)
     std::cout << driver.getAvailableLibraries() << std::endl;;
     std::cout << driver.getAvailableSensors() << std::endl;;
 
-    sleep( 2 );
+    sleep( 1 );
+
+    imu_inemo::output_mode mode;
+    mode.setMAG();
+    mode.setFrequency( imu_inemo::output_mode::HZ_100 );
+
+    driver.setOutputMode( mode );
+    driver.startAcquisition();
+
+    imu_inemo::sensor_data data;
+    for(int i=0; i<10; i++)
+    {
+	driver.getSensorData( data );
+	std::cout 
+	    << data.mag[0] << " "  
+	    << data.mag[1] << " "  
+	    << data.mag[2]
+	    << std::endl;
+    }
+
+    driver.stopAcquisition();
 
     driver.disconnect();
     driver.close();

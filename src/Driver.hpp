@@ -10,6 +10,28 @@
 namespace imu_inemo
 {
 
+boost::uint16_t bconv( boost::uint8_t c2, boost::uint8_t c1 )
+{
+    return c2 << 8 | c1 << 0;
+}
+void bconv( boost::uint16_t v, boost::uint8_t &c2, boost::uint8_t &c1 )
+{
+    c1 = 0xff & v;
+    c2 = 0xff & v >> 8;
+}
+
+boost::uint32_t bconv( boost::uint8_t c4, boost::uint8_t c3, boost::uint8_t c2, boost::uint8_t c1 )
+{
+    return 
+	c4 << 24 | c3 << 16 |
+	c2 << 8 | c1 << 0;
+}
+float bconvf( boost::uint8_t c4, boost::uint8_t c3, boost::uint8_t c2, boost::uint8_t c1 )
+{
+    uint32_t v = bconv( c4, c3, c2, c1 );
+    return *reinterpret_cast<float*>( &v );
+}
+
 struct Message
 {
     static const int HEADER_SIZE = 3;
@@ -78,6 +100,10 @@ struct Message
     {
 	return length + HEADER_SIZE - 1;
     }
+    int getPayloadLength() const
+    {
+	return length - 1;
+    }
 
     frame_type getFrameType() const
     {
@@ -102,6 +128,21 @@ struct Message
 	    throw std::runtime_error("Message access out of bounds");
 
 	return payload[index];
+    }
+
+    boost::uint16_t getUInt16( size_t index )
+    {
+	return bconv( operator[](index+0), operator[](index+1) );
+    }
+
+    boost::uint32_t getUInt32( size_t index )
+    {
+	return bconv( operator[](index+0), operator[](index+1), operator[](index+2), operator[](index+3) );
+    }
+
+    float getFloat( size_t index )
+    {
+	return bconvf( operator[](index+0), operator[](index+1), operator[](index+2), operator[](index+3) );
     }
 };
 
@@ -138,15 +179,42 @@ enum message_id
     iNEMO_Get_Acq_Data = 0x54,
 };
 
-enum error_code
+struct error_code
 {
-    iNEMO_Forbidden 	      = 0x00,
-    iNEMO_Unsupported_command     = 0x01, 
-    iNEMO_Out_of_range_value      = 0x02, 
-    iNEMO_Not_executable_command  = 0x03, 
-    iNEMO_Wrong_syntax            = 0x04, 
-    iNEMO_Not_connected	      = 0x05, 
+    boost::uint8_t value;
+
+    explicit error_code( boost::uint8_t value )
+	: value( value ) {}
+
+    enum codes
+    {
+	iNEMO_Forbidden 	      = 0x00,
+	iNEMO_Unsupported_command     = 0x01, 
+	iNEMO_Out_of_range_value      = 0x02, 
+	iNEMO_Not_executable_command  = 0x03, 
+	iNEMO_Wrong_syntax            = 0x04, 
+	iNEMO_Not_connected	      = 0x05, 
+    };
+
+    std::string toString()
+    {
+	if( value == iNEMO_Forbidden )
+	    return "Forbidden";
+	if( value == iNEMO_Unsupported_command )
+	    return "Unsupported command";
+	if( value == iNEMO_Out_of_range_value )
+	    return "Out-of-range value";
+	if( value == iNEMO_Not_executable_command )
+	    return "Not executable command";
+	if( value == iNEMO_Wrong_syntax  )
+	    return "Wrong syntax";
+	if( value == iNEMO_Not_connected )
+	    return "Not Connected";
+	
+	else return "Unknown Error.";
+    }
 };
+
 
 struct available_libraries
 {
@@ -208,83 +276,256 @@ struct available_sensors
     };
 };
 
+struct output_mode
+{
+    boost::uint8_t feat1;
+    boost::uint8_t feat2;
+    boost::uint16_t sample_count;
+
+    enum frequency
+    {
+	HZ_1 = 0,
+	HZ_10 = 1,
+	HZ_25 = 2,
+	HZ_50 = 3,
+	HZ_30 = 4,
+	HZ_100 = 5,
+	HZ_400 = 6,
+	SYNC = 7
+    };
+
+    output_mode()
+	: feat1(0), feat2(0), sample_count(0)
+    {}
+
+    void setAHRS() { feat1 |= 1 << 7; }
+    bool hasAHRS() { return 1 & feat1 >> 7; }
+    void setCompass() { feat1 |= 1 << 6; }
+    bool hasCompass() { return 1 & feat1 >> 6; }
+
+    void setRawData() { feat1 |= 1 << 5; }
+    bool hasRawData() { return 1 & feat1 >> 5; }
+
+    void setACC() { feat1 |= 1 << 4; }
+    bool hasACC() { return 1 & feat1 >> 4; }
+    void setGYRO() { feat1 |= 1 << 3; }
+    bool hasGYRO() { return 1 & feat1 >> 3; }
+    void setMAG() { feat1 |= 1 << 2; }
+    bool hasMAG() { return 1 & feat1 >> 2; }
+    void setPRESS() { feat1 |= 1 << 1; }
+    bool hasPRESS() { return 1 & feat1 >> 1; }
+    void setTEMP() { feat1 |= 1 << 0; }
+    bool hasTEMP() { return 1 & feat1 >> 0; }
+
+    void setAskData() { feat2 |= 1 << 6; }
+    bool hasAskData() { return 1 & feat2 >> 6; }
+    void setFrequency( frequency freq ) { feat2 |= freq << 3; }
+    frequency getFrequency() { return static_cast<frequency>(7 & feat2 >> 3); }
+};
+
+struct sensor_data
+{
+    uint16_t frame_counter;
+    uint16_t acc[3];
+    uint16_t gyro[3];
+    uint16_t mag[3];
+    uint32_t press;
+    uint16_t temp;
+    float rpy[3];
+    float quat[4];
+    float compass[4];
+
+    void setData( Message& msg, output_mode mode )
+    {
+	// check if the message is of the correct type first
+	if( msg.message_id != iNEMO_Acquisition_Data )
+	    throw std::runtime_error( "Wrong message type to read sensor data." );
+
+	// calculate the offsets
+	int offset = 0;
+	frame_counter = bconv( msg[offset], msg[offset] );
+	offset += 2;
+	if( mode.hasACC() ) 
+	{
+	    for( int i=0; i<3; i++ )
+	    {
+		acc[i] = msg.getUInt16( offset ); 
+		offset += 2;
+	    }
+	}
+	if( mode.hasGYRO() ) 
+	{
+	    for( int i=0; i<3; i++ )
+	    {
+		gyro[i] = msg.getUInt16( offset ); 
+		offset += 2;
+	    }
+	}
+	if( mode.hasMAG() ) 
+	{
+	    for( int i=0; i<3; i++ )
+	    {
+		mag[i] = msg.getUInt16( offset ); 
+		offset += 2;
+	    }
+	}
+	if( mode.hasPRESS() ) 
+	{
+	    press = msg.getUInt32( offset );
+	    offset += 4;
+	}
+	if( mode.hasTEMP() ) 
+	{
+	    temp = msg.getUInt16( offset );
+	    offset += 2;
+	}
+	if( mode.hasAHRS() ) 
+	{
+	    for( int i=0; i<3; i++ )
+	    {
+		rpy[i] = msg.getFloat( offset ); 
+		offset += 2;
+	    }
+	    for( int i=0; i<4; i++ )
+	    {
+		quat[i] = msg.getFloat( offset ); 
+		offset += 2;
+	    }
+	}
+	if( mode.hasCompass() ) 
+	{
+	    for( int i=0; i<4; i++ )
+	    {
+		compass[i] = msg.getFloat( offset ); 
+		offset += 2;
+	    }
+	}
+
+	if( offset != msg.getPayloadLength() )
+	{
+	    LOG_ERROR_S << "Sensor packet length mismatch. "
+		<< " Expected " << offset << " bytes, but message has "
+		<< msg.getPayloadLength() << " bytes ";
+	}
+    }
+};
 
 class Driver : public iodrivers_base::Driver
 {
 public:
     static const int MAX_PACKAGE_SIZE = 64;
     Message response;
+    output_mode mode;
 
     Driver() :
 	iodrivers_base::Driver( MAX_PACKAGE_SIZE )
     {
-	setReadTimeout( base::Time::fromMilliseconds( 200 ) );
+	setReadTimeout( base::Time::fromMilliseconds( 1500 ) );
     }
 
     void connect()
     {
-	Message msg( Message::CONTROL, true, 0, 
-		Message::VERSION1, Message::QOS_NORMAL, 1, 
-		iNEMO_Connect );
-	sendMessage( msg );
+	sendCommand( iNEMO_Connect );
+	stopAcquisition();
     };
 
     void disconnect()
     {
-	Message msg( Message::CONTROL, true, 0, 
-		Message::VERSION1, Message::QOS_NORMAL, 1, 
-		iNEMO_Disconnect );
-	sendMessage( msg );
+	sendCommand( iNEMO_Disconnect );
     };
 
     available_libraries getAvailableLibraries()
     {
-	Message msg( Message::CONTROL, true, 0, 
-		Message::VERSION1, Message::QOS_NORMAL, 1, 
-		iNEMO_Get_Libraries );
-	sendMessage( msg );
+	sendCommand( iNEMO_Get_Libraries );
 	return available_libraries(response[0]);
     };
 
     available_sensors getAvailableSensors()
     {
-	Message msg( Message::CONTROL, true, 0, 
-		Message::VERSION1, Message::QOS_NORMAL, 1, 
-		iNEMO_Get_Available_Sensors );
-	sendMessage( msg );
+	sendCommand( iNEMO_Get_Available_Sensors );
 	return available_sensors(response[0]);
     };
 
+    void setOutputMode( const output_mode& mode )
+    {
+	this->mode = mode;
+	Message msg( Message::CONTROL, true, 0, 
+		Message::VERSION1, Message::QOS_NORMAL, 5, 
+		iNEMO_Set_Output_Mode );
+	*reinterpret_cast<output_mode*>(msg.payload) = mode;
+	sendMessage( msg );
+    }
+
+    void startAcquisition()
+    {
+	sendCommand( iNEMO_Start_Acquisition );
+    }
+
+    void stopAcquisition()
+    {
+	sendCommand( iNEMO_Stop_Acquisition );
+    }
+
+    bool getSensorData( sensor_data& data )
+    {
+	LOG_DEBUG_S << "Read Sensor Data"; 
+	if( readPacket() )
+	{
+	    data.setData( response, mode );
+	    return true;
+	}
+	else
+	    return false;
+    }
+
+    void sendCommand( message_id id )
+    {
+	Message msg( Message::CONTROL, true, 0, 
+		Message::VERSION1, Message::QOS_NORMAL, 1, 
+		id );
+	sendMessage( msg );
+    }
+
+    bool readPacket()
+    {
+	return iodrivers_base::Driver::readPacket( reinterpret_cast<boost::uint8_t*>(&response), MAX_PACKAGE_SIZE );
+    }
+
     void sendMessage( const Message& msg )
     {
+	LOG_DEBUG_S << "Sending message with id 0x" 
+	    << std::hex << (int)msg.message_id << " and length " 
+	    << msg.getPacketLength();
 	// send out the packet
 	writePacket( reinterpret_cast<const boost::uint8_t*>(&msg), msg.getPacketLength() );
 
 	if( msg.getAck() )
 	{
 	    // packet requires an acknowledgement
-	    if( readPacket( reinterpret_cast<boost::uint8_t*>(&response), MAX_PACKAGE_SIZE ) )
+	    while( readPacket() )
 	    {
 		if( response.message_id != msg.message_id )
-		    throw std::runtime_error( "Response message_id did not match packet." );
+		{
+		    LOG_DEBUG_S << "Got message id 0x" << std::hex << (int)response.message_id
+			<< " but was expecting 0x" << std::hex << (int)msg.message_id; 
+		    continue;
+		}
 
 		if( response.getFrameType() == Message::ACK )
 		{
+		    LOG_DEBUG_S << "Got ACK response for message id 0x" << std::hex << (int)msg.message_id;
 		    return;
 		}
 		else if( response.getFrameType() == Message::NACK ) 
 		{
-		    uint8_t error = response[0];
-		    throw std::runtime_error( "Message responded with error code " + error );
+		    error_code error( response[0] );
+		    LOG_DEBUG_S << "Message responded with error code: " << error.toString();
+		    throw std::runtime_error( "Message responded with error code: " + error.toString() );
 		}
 		else
 		{
 		    throw std::runtime_error( "Not a valid response packet." );
 		}
-	    }
-	    else
-	    {
-		throw std::runtime_error( "Did not get a response for packet which requires ACK." );
 	    }
 	}
     }
