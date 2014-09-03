@@ -10,27 +10,11 @@
 namespace imu_inemo
 {
 
-boost::uint16_t bconv( boost::uint8_t c2, boost::uint8_t c1 )
-{
-    return c2 << 8 | c1 << 0;
-}
-void bconv( boost::uint16_t v, boost::uint8_t &c2, boost::uint8_t &c1 )
-{
-    c1 = 0xff & v;
-    c2 = 0xff & v >> 8;
-}
-
-boost::uint32_t bconv( boost::uint8_t c4, boost::uint8_t c3, boost::uint8_t c2, boost::uint8_t c1 )
-{
-    return 
-	c4 << 24 | c3 << 16 |
-	c2 << 8 | c1 << 0;
-}
-float bconvf( boost::uint8_t c4, boost::uint8_t c3, boost::uint8_t c2, boost::uint8_t c1 )
-{
-    uint32_t v = bconv( c4, c3, c2, c1 );
-    return *reinterpret_cast<float*>( &v );
-}
+template<int n> struct fixed_int { typedef boost::uint64_t type; };
+template<> struct fixed_int<8> { typedef boost::uint64_t type; };
+template<> struct fixed_int<4> { typedef boost::uint32_t type; };
+template<> struct fixed_int<2> { typedef boost::uint16_t type; };
+template<> struct fixed_int<1> { typedef boost::uint8_t type; };
 
 struct Message
 {
@@ -130,19 +114,13 @@ struct Message
 	return payload[index];
     }
 
-    boost::uint16_t getUInt16( size_t index )
+    template <class T>
+    T get( size_t index )
     {
-	return bconv( operator[](index+0), operator[](index+1) );
-    }
-
-    boost::uint32_t getUInt32( size_t index )
-    {
-	return bconv( operator[](index+0), operator[](index+1), operator[](index+2), operator[](index+3) );
-    }
-
-    float getFloat( size_t index )
-    {
-	return bconvf( operator[](index+0), operator[](index+1), operator[](index+2), operator[](index+3) );
+	typename fixed_int<sizeof(T)>::type res = 0;
+	for( int i=0; i<sizeof(T); i++ )
+	    res |= operator[](index+sizeof(T)-1-i) << (i*8);
+	return *reinterpret_cast<T*>(&res);
     }
 };
 
@@ -325,12 +303,12 @@ struct output_mode
 
 struct sensor_data
 {
-    uint16_t frame_counter;
-    uint16_t acc[3];
-    uint16_t gyro[3];
-    uint16_t mag[3];
-    uint32_t press;
-    uint16_t temp;
+    boost::uint16_t frame_counter;
+    boost::int16_t acc[3];
+    boost::int16_t gyro[3];
+    boost::int16_t mag[3];
+    boost::int32_t press;
+    boost::int16_t temp;
     float rpy[3];
     float quat[4];
     float compass[4];
@@ -343,13 +321,13 @@ struct sensor_data
 
 	// calculate the offsets
 	int offset = 0;
-	frame_counter = bconv( msg[offset], msg[offset] );
+	frame_counter = msg.get<boost::uint16_t>( offset ); 
 	offset += 2;
 	if( mode.hasACC() ) 
 	{
 	    for( int i=0; i<3; i++ )
 	    {
-		acc[i] = msg.getUInt16( offset ); 
+		acc[i] = msg.get<boost::int16_t>( offset ); 
 		offset += 2;
 	    }
 	}
@@ -357,7 +335,7 @@ struct sensor_data
 	{
 	    for( int i=0; i<3; i++ )
 	    {
-		gyro[i] = msg.getUInt16( offset ); 
+		gyro[i] = msg.get<boost::int16_t>( offset ); 
 		offset += 2;
 	    }
 	}
@@ -365,39 +343,39 @@ struct sensor_data
 	{
 	    for( int i=0; i<3; i++ )
 	    {
-		mag[i] = msg.getUInt16( offset ); 
+		mag[i] = msg.get<boost::int16_t>( offset ); 
 		offset += 2;
 	    }
 	}
 	if( mode.hasPRESS() ) 
 	{
-	    press = msg.getUInt32( offset );
+	    press = msg.get<boost::int32_t>( offset );
 	    offset += 4;
 	}
 	if( mode.hasTEMP() ) 
 	{
-	    temp = msg.getUInt16( offset );
+	    temp = msg.get<boost::int16_t>( offset );
 	    offset += 2;
 	}
 	if( mode.hasAHRS() ) 
 	{
 	    for( int i=0; i<3; i++ )
 	    {
-		rpy[i] = msg.getFloat( offset ); 
-		offset += 2;
+		rpy[i] = msg.get<float>( offset ); 
+		offset += 4;
 	    }
 	    for( int i=0; i<4; i++ )
 	    {
-		quat[i] = msg.getFloat( offset ); 
-		offset += 2;
+		quat[i] = msg.get<float>( offset ); 
+		offset += 4;
 	    }
 	}
 	if( mode.hasCompass() ) 
 	{
 	    for( int i=0; i<4; i++ )
 	    {
-		compass[i] = msg.getFloat( offset ); 
-		offset += 2;
+		compass[i] = msg.get<float>( offset ); 
+		offset += 4;
 	    }
 	}
 
@@ -488,7 +466,8 @@ public:
 
     bool readPacket()
     {
-	return iodrivers_base::Driver::readPacket( reinterpret_cast<boost::uint8_t*>(&response), MAX_PACKAGE_SIZE );
+	return iodrivers_base::Driver::readPacket( 
+		reinterpret_cast<boost::uint8_t*>(&response), MAX_PACKAGE_SIZE );
     }
 
     void sendMessage( const Message& msg )
@@ -535,7 +514,7 @@ public:
 	if( buffer_size >= Message::HEADER_SIZE )
 	{
 	    const Message *msg( reinterpret_cast<const Message*>(buffer) );
-	    int length = msg->getPacketLength();
+	    size_t length = msg->getPacketLength();
 	    if( length > MAX_PACKAGE_SIZE || length == 0 )
 	    {
 		// this is really bad, since the stream is out of sync
@@ -544,7 +523,9 @@ public:
 		LOG_WARN_S << "Got bad message with length of " << length << std::endl;
 		return -buffer_size;
 	    }
-	    return length;
+	    if( length <= buffer_size )
+		return length;
+	    // packet seems to be partial for know
 	}
 
 	// there is no particular way of identifying a packet start

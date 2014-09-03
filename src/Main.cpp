@@ -19,10 +19,10 @@ int main(int argc, char** argv)
     std::cout << driver.getAvailableLibraries() << std::endl;;
     std::cout << driver.getAvailableSensors() << std::endl;;
 
-    sleep( 1 );
-
     imu_inemo::output_mode mode;
     mode.setMAG();
+    mode.setACC();
+    mode.setAHRS();
     mode.setFrequency( imu_inemo::output_mode::HZ_100 );
 
     driver.setOutputMode( mode );
@@ -35,7 +35,10 @@ int main(int argc, char** argv)
 	std::cout 
 	    << data.mag[0] << " "  
 	    << data.mag[1] << " "  
-	    << data.mag[2]
+	    << data.mag[2] << " -  " 
+	    << data.acc[0] << " "  
+	    << data.acc[1] << " "  
+	    << data.acc[2]
 	    << std::endl;
     }
 
