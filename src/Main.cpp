@@ -35,10 +35,16 @@ int main(int argc, char** argv)
 	std::cout 
 	    << data.mag[0] << " "  
 	    << data.mag[1] << " "  
-	    << data.mag[2] << " -  " 
+	    << data.mag[2] 
+	    << " -  " 
 	    << data.acc[0] << " "  
 	    << data.acc[1] << " "  
 	    << data.acc[2]
+	    << " -  " 
+	    << data.quat[0] << " "  
+	    << data.quat[1] << " "  
+	    << data.quat[2] << " "  
+	    << data.quat[3]
 	    << std::endl;
     }
 
