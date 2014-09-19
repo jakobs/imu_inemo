@@ -4,6 +4,7 @@
 #include <iodrivers_base/Driver.hpp>
 #include <boost/cstdint.hpp>
 #include <base/Logging.hpp>
+#include <base/Eigen.hpp>
 
 #include <iostream>
 
@@ -312,6 +313,29 @@ struct sensor_data
     float rpy[3];
     float quat[4];
     float compass[4];
+
+    base::Quaterniond getOrientation() const
+    {
+	return base::Quaterniond( quat[0], quat[1], quat[2], quat[3] );
+    }
+
+    base::Vector3d getAccelerometer() const
+    {
+	// value is in mg, convert to g
+	return Eigen::Map<const Eigen::Matrix<boost::int16_t,3,1> >(acc).cast<double>() / 1e3;
+    }
+
+    base::Vector3d getGyro() const
+    {
+	// value is in degree per second, convert to rad/s
+	return Eigen::Map<const Eigen::Matrix<boost::int16_t,3,1> >(gyro).cast<double>() / 180.0 * M_PI;
+    }
+
+    base::Vector3d getMagnetometer() const
+    {
+	// value is in mGauss, convert to Gauss
+	return Eigen::Map<const Eigen::Matrix<boost::int16_t,3,1> >(mag).cast<double>() / 1e3;
+    }
 
     void setData( Message& msg, output_mode mode )
     {
