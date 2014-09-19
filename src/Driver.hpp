@@ -398,7 +398,6 @@ public:
     Driver() :
 	iodrivers_base::Driver( MAX_PACKAGE_SIZE )
     {
-	setReadTimeout( base::Time::fromMilliseconds( 1500 ) );
     }
 
     void connect()
